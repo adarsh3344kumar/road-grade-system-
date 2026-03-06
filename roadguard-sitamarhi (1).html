@@ -1,0 +1,1852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RoadGuard — Sitamarhi Nagar Nigam Road Monitoring</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --bg:#060810; --surface:#0d1117; --surface2:#131a24; --surface3:#1a2232;
+  --border:#1e2a3a; --border2:#253040;
+  --accent:#f5a623; --accent2:#e8441a; --accent3:#0ea5e9;
+  --green:#22c55e; --yellow:#f5a623; --red:#ef4444; --blue:#3b82f6; --purple:#a855f7;
+  --text:#dce6f5; --text2:#6b7f9e; --text3:#3d4f66;
+  --mono:'Space Mono',monospace; --head:'Bebas Neue',sans-serif; --body:'DM Sans',sans-serif;
+  --radius:12px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:var(--body);min-height:100vh;overflow-x:hidden;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px;}
+
+/* ── HEADER ── */
+header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 1.5rem;height:56px;
+  background:rgba(13,17,23,.95);border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:1000;backdrop-filter:blur(12px);
+}
+.logo{display:flex;align-items:center;gap:.6rem;font-family:var(--head);font-size:1.6rem;letter-spacing:.12em;color:var(--text);}
+.logo span{color:var(--accent);}
+.logo-indicator{width:8px;height:8px;background:var(--accent);border-radius:50%;box-shadow:0 0 10px var(--accent);animation:breathe 2s ease infinite;}
+@keyframes breathe{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.6)}}
+
+nav{display:flex;gap:2px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:3px;}
+nav button{
+  background:none;border:none;color:var(--text2);cursor:pointer;
+  font-family:var(--body);font-size:.82rem;font-weight:500;
+  padding:.38rem .85rem;border-radius:7px;transition:all .2s;white-space:nowrap;
+}
+nav button:hover{color:var(--text);}
+nav button.active{background:var(--surface3);color:var(--accent);border:1px solid var(--border2);}
+nav button .nav-icon{margin-right:.3rem;}
+
+.header-right{display:flex;align-items:center;gap:1rem;}
+.live-badge{
+  display:flex;align-items:center;gap:.4rem;
+  font-family:var(--mono);font-size:.7rem;color:var(--text2);
+  background:var(--surface2);border:1px solid var(--border);
+  padding:.3rem .7rem;border-radius:6px;
+}
+.live-dot{width:6px;height:6px;background:var(--green);border-radius:50%;animation:breathe .9s ease infinite;}
+.notification-btn{
+  position:relative;background:var(--surface2);border:1px solid var(--border);
+  color:var(--text2);cursor:pointer;padding:.35rem .5rem;border-radius:8px;
+  font-size:.9rem;transition:all .2s;
+}
+.notification-btn:hover{border-color:var(--accent);color:var(--accent);}
+.notif-badge{
+  position:absolute;top:-4px;right:-4px;
+  background:var(--red);color:#fff;font-size:.55rem;font-family:var(--mono);
+  width:14px;height:14px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+}
+
+/* ── LAYOUT ── */
+main{display:flex;height:calc(100vh - 56px);}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  width:320px;min-width:320px;background:var(--surface);
+  border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;
+}
+.sidebar-tabs{display:flex;border-bottom:1px solid var(--border);}
+.sidebar-tab{
+  flex:1;background:none;border:none;color:var(--text2);cursor:pointer;
+  font-family:var(--body);font-size:.78rem;font-weight:500;
+  padding:.65rem .5rem;border-bottom:2px solid transparent;transition:all .2s;
+}
+.sidebar-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.sidebar-header{padding:1rem 1.2rem .6rem;border-bottom:1px solid var(--border);}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;}
+.stat-chip{
+  padding:.55rem .7rem;border-radius:8px;
+  background:var(--surface2);border:1px solid var(--border);
+}
+.stat-chip .num{font-family:var(--mono);font-size:1.2rem;font-weight:700;}
+.stat-chip .lbl{font-size:.62rem;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-top:.1rem;}
+.num.red{color:var(--red);}
+.num.yellow{color:var(--yellow);}
+.num.blue{color:var(--blue);}
+.num.green{color:var(--green);}
+
+.reports-scroll{flex:1;overflow-y:auto;padding:.5rem;}
+.report-card{
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:10px;padding:.8rem 1rem;margin-bottom:.5rem;
+  cursor:pointer;transition:all .2s;position:relative;overflow:hidden;
+}
+.report-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:3px 0 0 3px;}
+.report-card.severe::before{background:var(--red);}
+.report-card.moderate::before{background:var(--yellow);}
+.report-card.minor::before{background:var(--blue);}
+.report-card.fixed::before{background:var(--green);}
+.report-card:hover{border-color:var(--border2);transform:translateX(2px);}
+.report-card.selected{border-color:var(--accent);}
+.card-row1{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.3rem;}
+.card-id{font-family:var(--mono);font-size:.65rem;color:var(--text3);}
+.sev-badge{font-size:.65rem;font-weight:600;padding:.1rem .45rem;border-radius:4px;text-transform:uppercase;letter-spacing:.06em;}
+.badge-severe{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.25);}
+.badge-moderate{background:rgba(245,166,35,.15);color:var(--yellow);border:1px solid rgba(245,166,35,.25);}
+.badge-minor{background:rgba(59,130,246,.15);color:var(--blue);border:1px solid rgba(59,130,246,.25);}
+.badge-fixed{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.25);}
+.badge-cctv{background:rgba(168,85,247,.15);color:var(--purple);border:1px solid rgba(168,85,247,.25);}
+.card-loc{font-size:.82rem;font-weight:500;margin-bottom:.2rem;}
+.card-desc{font-size:.74rem;color:var(--text2);line-height:1.4;}
+.card-footer{display:flex;justify-content:space-between;margin-top:.5rem;font-size:.68rem;color:var(--text2);font-family:var(--mono);}
+.status-dot-sm{width:5px;height:5px;border-radius:50%;display:inline-block;margin-right:.3rem;}
+
+/* ── PANELS ── */
+.panel{display:none;flex:1;flex-direction:column;overflow:hidden;}
+.panel.active{display:flex;}
+.panel-header{
+  padding:1rem 1.8rem;border-bottom:1px solid var(--border);
+  background:var(--surface);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+}
+.panel-title{font-family:var(--head);font-size:1.5rem;letter-spacing:.08em;}
+.panel-sub{font-size:.78rem;color:var(--text2);margin-top:.1rem;}
+
+/* ── MAP ── */
+#map{width:100%;height:100%;}
+.map-overlay{position:absolute;top:1rem;right:1rem;z-index:500;display:flex;flex-direction:column;gap:.4rem;}
+.map-btn{
+  background:rgba(13,17,23,.9);border:1px solid var(--border);
+  color:var(--text2);cursor:pointer;padding:.45rem .9rem;
+  font-family:var(--body);font-size:.78rem;font-weight:500;
+  border-radius:8px;transition:all .2s;backdrop-filter:blur(8px);
+}
+.map-btn:hover,.map-btn.active{background:var(--accent);border-color:var(--accent);color:#000;}
+.map-legend{
+  position:absolute;bottom:1.5rem;left:1rem;z-index:500;
+  background:rgba(13,17,23,.92);border:1px solid var(--border);
+  border-radius:10px;padding:.8rem 1rem;backdrop-filter:blur(8px);
+}
+.legend-title{font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);margin-bottom:.5rem;}
+.legend-item{display:flex;align-items:center;gap:.5rem;font-size:.72rem;margin-bottom:.3rem;}
+.legend-dot{width:10px;height:10px;border-radius:50%;}
+
+.map-cctv-overlay{
+  position:absolute;top:1rem;left:1rem;z-index:500;
+  background:rgba(13,17,23,.92);border:1px solid var(--border);
+  border-radius:10px;padding:.8rem 1rem;backdrop-filter:blur(8px);max-width:220px;
+}
+.cctv-label{font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--purple);margin-bottom:.5rem;}
+.cctv-camera-item{display:flex;align-items:center;gap:.5rem;font-size:.72rem;margin-bottom:.3rem;cursor:pointer;}
+.cctv-status-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.cctv-online{background:var(--green);}
+.cctv-offline{background:var(--red);}
+
+/* ── REPORT FORM ── */
+.report-content{flex:1;overflow-y:auto;padding:1.4rem 1.8rem;display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;align-content:start;}
+.form-section-title{
+  font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--text2);
+  padding-bottom:.4rem;border-bottom:1px solid var(--border);margin-bottom:.7rem;
+}
+.full{grid-column:1/-1;}
+.form-group{display:flex;flex-direction:column;gap:.35rem;}
+label{font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);}
+input,select,textarea{
+  background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  padding:.6rem .8rem;border-radius:8px;font-family:var(--body);font-size:.88rem;
+  transition:border-color .2s;outline:none;
+}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);}
+select option{background:var(--surface2);}
+textarea{resize:vertical;min-height:80px;}
+.upload-zone{
+  border:2px dashed var(--border);border-radius:10px;
+  padding:1.5rem;text-align:center;cursor:pointer;
+  transition:all .2s;position:relative;
+}
+.upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:rgba(245,166,35,.04);}
+#photo-input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.photo-preview{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.6rem;}
+.photo-thumb{width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--border);}
+.gps-display{
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:8px;padding:.7rem 1rem;
+  display:flex;align-items:center;gap:.8rem;
+}
+.gps-coords{font-family:var(--mono);font-size:.75rem;color:var(--accent);}
+.gps-status{font-size:.68rem;color:var(--text2);margin-top:.1rem;}
+.gps-btn{background:var(--accent);border:none;color:#000;cursor:pointer;padding:.35rem .7rem;border-radius:6px;font-weight:600;font-size:.78rem;}
+.submit-btn{
+  background:var(--accent);border:none;color:#000;cursor:pointer;
+  padding:.85rem 2rem;border-radius:10px;font-family:var(--body);
+  font-size:1rem;font-weight:700;transition:all .2s;width:100%;
+}
+.submit-btn:hover{background:#e09710;transform:translateY(-1px);}
+
+/* ── ADMIN ── */
+.admin-content{flex:1;overflow-y:auto;padding:1.4rem 1.8rem;}
+.admin-stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:.8rem;margin-bottom:1.4rem;}
+.admin-stat{
+  background:var(--surface2);border:1px solid var(--border);border-radius:10px;
+  padding:1.1rem 1.2rem;position:relative;overflow:hidden;
+}
+.admin-stat::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:2px;
+}
+.admin-stat.s-total::after{background:var(--accent);}
+.admin-stat.s-pending::after{background:var(--red);}
+.admin-stat.s-review::after{background:var(--yellow);}
+.admin-stat.s-scheduled::after{background:var(--purple);}
+.admin-stat.s-fixed::after{background:var(--green);}
+.admin-stat-num{font-family:var(--mono);font-size:1.8rem;font-weight:700;}
+.admin-stat-lbl{font-size:.72rem;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;margin-top:.2rem;}
+
+.section-header{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:.8rem;
+}
+.section-title{font-family:var(--head);font-size:1.1rem;letter-spacing:.06em;}
+.filter-row{display:flex;gap:.4rem;}
+.filter-btn{
+  background:none;border:1px solid var(--border);color:var(--text2);
+  padding:.28rem .65rem;border-radius:6px;cursor:pointer;
+  font-size:.75rem;font-weight:500;transition:all .2s;
+}
+.filter-btn:hover,.filter-btn.active{border-color:var(--accent);color:var(--accent);}
+
+.table-wrap{background:var(--surface2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:1.4rem;}
+table{width:100%;border-collapse:collapse;}
+th{
+  text-align:left;padding:.65rem 1rem;
+  font-size:.7rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap;
+}
+td{padding:.7rem 1rem;font-size:.83rem;border-bottom:1px solid rgba(30,42,58,.5);vertical-align:middle;}
+tr:hover td{background:rgba(255,255,255,.02);}
+tr:last-child td{border-bottom:none;}
+.action-btn{
+  background:var(--surface);border:1px solid var(--border);
+  color:var(--text);cursor:pointer;padding:.25rem .55rem;
+  border-radius:5px;font-size:.72rem;font-weight:500;transition:all .15s;margin-right:.25rem;
+}
+.action-btn:hover{border-color:var(--accent);color:var(--accent);}
+.action-btn.success{border-color:rgba(34,197,94,.4);color:var(--green);}
+.action-btn.success:hover{background:rgba(34,197,94,.1);}
+.action-btn.purple{border-color:rgba(168,85,247,.4);color:var(--purple);}
+.action-btn.purple:hover{background:rgba(168,85,247,.1);}
+.action-btn.danger{border-color:rgba(239,68,68,.4);color:var(--red);}
+
+/* ── ANALYTICS ── */
+.analytics-content{flex:1;overflow-y:auto;padding:1.4rem 1.8rem;}
+.analytics-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.2rem;}
+.chart-card{
+  background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.2rem;
+}
+.chart-title{font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);margin-bottom:.9rem;}
+.bar-chart{display:flex;flex-direction:column;gap:.55rem;}
+.bar-row{display:flex;align-items:center;gap:.8rem;}
+.bar-label{font-size:.75rem;color:var(--text2);min-width:80px;}
+.bar-track{flex:1;background:var(--border);border-radius:4px;height:10px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:4px;transition:width .8s cubic-bezier(.4,0,.2,1);}
+.bar-val{font-family:var(--mono);font-size:.7rem;color:var(--text2);min-width:25px;text-align:right;}
+.donut-wrap{position:relative;display:flex;justify-content:center;align-items:center;}
+.donut-center{position:absolute;text-align:center;}
+.donut-num{font-family:var(--mono);font-size:1.6rem;font-weight:700;color:var(--text);}
+.donut-lbl{font-size:.65rem;color:var(--text2);}
+
+.timeline-card{
+  background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.2rem;margin-bottom:1rem;
+}
+.timeline{display:flex;flex-direction:column;gap:.7rem;}
+.timeline-item{display:flex;gap:1rem;align-items:flex-start;}
+.tl-dot{width:10px;height:10px;border-radius:50%;margin-top:.3rem;flex-shrink:0;}
+.tl-content{flex:1;}
+.tl-title{font-size:.82rem;font-weight:500;}
+.tl-meta{font-size:.7rem;color:var(--text2);font-family:var(--mono);margin-top:.1rem;}
+.tl-line{width:1px;background:var(--border);margin:2px 0 2px 4.5px;height:12px;}
+
+/* ── CCTV PANEL ── */
+.cctv-content{flex:1;overflow-y:auto;padding:1.4rem 1.8rem;}
+.cctv-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem;margin-bottom:1.4rem;}
+.cctv-feed{
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:10px;overflow:hidden;cursor:pointer;transition:all .2s;
+}
+.cctv-feed:hover{border-color:var(--purple);}
+.cctv-screen{
+  aspect-ratio:16/9;background:#040608;position:relative;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+}
+.cctv-noise{
+  position:absolute;inset:0;opacity:.03;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+}
+.scan-line{
+  position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,rgba(34,197,94,.4),transparent);
+  animation:scan 3s linear infinite;
+}
+@keyframes scan{0%{top:0}100%{top:100%}}
+.cctv-icon{font-size:2.5rem;opacity:.1;}
+.cctv-live-badge{
+  position:absolute;top:.5rem;left:.5rem;
+  background:rgba(239,68,68,.9);color:#fff;
+  font-size:.58rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  padding:.15rem .4rem;border-radius:3px;
+  display:flex;align-items:center;gap:.3rem;
+}
+.cctv-offline-overlay{
+  position:absolute;inset:0;background:rgba(6,8,16,.8);
+  display:flex;align-items:center;justify-content:center;
+  font-size:.75rem;color:var(--red);font-weight:600;letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.cctv-info{padding:.7rem .8rem;}
+.cctv-name{font-size:.8rem;font-weight:600;margin-bottom:.2rem;}
+.cctv-meta{font-size:.68rem;color:var(--text2);font-family:var(--mono);}
+.cctv-alerts{
+  background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1rem 1.2rem;margin-bottom:1rem;
+}
+.alert-item{
+  display:flex;align-items:flex-start;gap:.8rem;padding:.7rem 0;
+  border-bottom:1px solid var(--border);
+}
+.alert-item:last-child{border-bottom:none;}
+.alert-icon{font-size:1rem;margin-top:.1rem;}
+.alert-body{flex:1;}
+.alert-title{font-size:.82rem;font-weight:500;}
+.alert-meta{font-size:.7rem;color:var(--text2);font-family:var(--mono);margin-top:.1rem;}
+.alert-severity{font-size:.65rem;font-weight:600;padding:.1rem .4rem;border-radius:4px;margin-left:.4rem;}
+
+/* ── NOTIFICATIONS ── */
+.notif-panel{
+  position:fixed;top:56px;right:0;width:360px;height:calc(100vh - 56px);
+  background:var(--surface);border-left:1px solid var(--border);
+  z-index:800;transform:translateX(100%);transition:transform .3s;overflow-y:auto;
+}
+.notif-panel.open{transform:translateX(0);}
+.notif-header{padding:1rem 1.2rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.notif-title{font-family:var(--head);font-size:1.1rem;letter-spacing:.06em;}
+.notif-close{background:none;border:none;color:var(--text2);cursor:pointer;font-size:1.1rem;}
+.notif-item{
+  padding:.9rem 1.2rem;border-bottom:1px solid var(--border);
+  display:flex;gap:.8rem;align-items:flex-start;transition:background .2s;cursor:pointer;
+}
+.notif-item:hover{background:var(--surface2);}
+.notif-item.unread{background:rgba(245,166,35,.04);}
+.notif-dot{width:8px;height:8px;border-radius:50%;margin-top:.3rem;flex-shrink:0;}
+.notif-body{flex:1;}
+.notif-text{font-size:.82rem;line-height:1.4;}
+.notif-time{font-size:.68rem;color:var(--text2);font-family:var(--mono);margin-top:.2rem;}
+
+/* ── REPAIR TRACKING ── */
+.repair-content{flex:1;overflow-y:auto;padding:1.4rem 1.8rem;}
+.repair-track-card{
+  background:var(--surface2);border:1px solid var(--border);border-radius:12px;
+  padding:1.2rem;margin-bottom:1rem;
+}
+.repair-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.9rem;}
+.repair-id{font-family:var(--mono);font-size:.7rem;color:var(--text2);}
+.repair-loc{font-size:.95rem;font-weight:600;margin-bottom:.2rem;}
+.repair-desc{font-size:.78rem;color:var(--text2);}
+.repair-progress{margin-top:1rem;}
+.progress-steps{display:flex;align-items:flex-start;gap:0;}
+.step{flex:1;display:flex;flex-direction:column;align-items:center;position:relative;}
+.step:not(:last-child)::after{
+  content:'';position:absolute;top:11px;left:50%;right:-50%;
+  height:2px;background:var(--border);z-index:0;
+}
+.step.done:not(:last-child)::after{background:var(--green);}
+.step-circle{
+  width:24px;height:24px;border-radius:50%;border:2px solid var(--border);
+  background:var(--surface2);display:flex;align-items:center;justify-content:center;
+  font-size:.7rem;z-index:1;position:relative;transition:all .3s;
+}
+.step.done .step-circle{border-color:var(--green);background:rgba(34,197,94,.15);color:var(--green);}
+.step.active .step-circle{border-color:var(--accent);background:rgba(245,166,35,.15);color:var(--accent);}
+.step-label{font-size:.62rem;color:var(--text2);margin-top:.4rem;text-align:center;text-transform:uppercase;letter-spacing:.04em;}
+.step.done .step-label{color:var(--green);}
+.step.active .step-label{color:var(--accent);}
+
+/* ── GOVERNMENT PANEL ── */
+.govt-content{flex:1;overflow-y:auto;padding:1.4rem 1.8rem;}
+.dept-card{
+  background:var(--surface2);border:1px solid var(--border);border-radius:12px;
+  padding:1.1rem 1.2rem;margin-bottom:.8rem;display:flex;align-items:center;gap:1rem;
+}
+.dept-icon{font-size:1.8rem;width:48px;height:48px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:var(--surface3);}
+.dept-info{flex:1;}
+.dept-name{font-size:.9rem;font-weight:600;}
+.dept-meta{font-size:.75rem;color:var(--text2);margin-top:.1rem;}
+.dept-actions{display:flex;gap:.4rem;}
+.escalation-form{
+  background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.2rem;margin-bottom:1rem;
+}
+
+/* ── MODAL ── */
+.modal-backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:2000;
+  display:flex;align-items:center;justify-content:center;padding:1rem;
+  opacity:0;pointer-events:none;transition:opacity .25s;
+}
+.modal-backdrop.open{opacity:1;pointer-events:all;}
+.modal{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  width:100%;max-width:560px;padding:1.8rem;
+  transform:scale(.96);transition:transform .25s;max-height:90vh;overflow-y:auto;
+}
+.modal-backdrop.open .modal{transform:scale(1);}
+.modal-title{font-family:var(--head);font-size:1.4rem;letter-spacing:.06em;margin-bottom:1.2rem;}
+.modal-row{display:flex;gap:.8rem;margin-bottom:.7rem;}
+.modal-label{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);min-width:90px;padding-top:.15rem;}
+.modal-val{font-size:.88rem;flex:1;}
+.modal-actions{display:flex;gap:.6rem;margin-top:1.4rem;flex-wrap:wrap;}
+.modal-btn{
+  padding:.5rem 1.1rem;border-radius:8px;font-size:.82rem;font-weight:600;cursor:pointer;border:1px solid;transition:all .2s;
+}
+.modal-btn.primary{background:var(--accent);border-color:var(--accent);color:#000;}
+.modal-btn.primary:hover{background:#e09710;}
+.modal-btn.ghost{background:none;border-color:var(--border);color:var(--text2);}
+.modal-btn.ghost:hover{border-color:var(--accent);color:var(--accent);}
+.modal-btn.success{background:none;border-color:rgba(34,197,94,.4);color:var(--green);}
+.modal-btn.success:hover{background:rgba(34,197,94,.1);}
+.modal-btn.danger{background:none;border-color:rgba(239,68,68,.4);color:var(--red);}
+
+/* ── TOAST ── */
+.toast{
+  position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:.9rem 1.2rem;
+  font-family:var(--body);
+  transform:translateY(80px);opacity:0;transition:all .3s;
+  max-width:320px;pointer-events:none;
+}
+.toast.show{transform:translateY(0);opacity:1;pointer-events:all;}
+.toast-title{font-size:.88rem;font-weight:600;color:var(--accent);margin-bottom:.15rem;}
+.toast-body{font-size:.78rem;color:var(--text2);}
+
+/* ── CCTV MODAL ── */
+.cctv-modal-screen{
+  width:100%;aspect-ratio:16/9;background:#040608;
+  border-radius:8px;overflow:hidden;position:relative;
+  display:flex;align-items:center;justify-content:center;margin-bottom:1rem;
+}
+
+/* ── MISC ── */
+.section-divider{
+  font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--text3);
+  padding:.4rem 0;margin-bottom:.6rem;display:flex;align-items:center;gap:.6rem;
+}
+.section-divider::after{content:'';flex:1;height:1px;background:var(--border);}
+
+.tag{font-size:.65rem;padding:.1rem .45rem;border-radius:4px;font-weight:600;}
+.tag-cctv{background:rgba(168,85,247,.15);color:var(--purple);border:1px solid rgba(168,85,247,.25);}
+.tag-ai{background:rgba(14,165,233,.15);color:var(--accent3);border:1px solid rgba(14,165,233,.25);}
+.tag-new{background:rgba(245,166,35,.15);color:var(--yellow);border:1px solid rgba(245,166,35,.25);}
+
+/* Leaflet dark */
+.leaflet-container{background:#080c14!important;}
+.leaflet-tile-pane{filter:brightness(.8) saturate(.6) hue-rotate(200deg) invert(1) contrast(1.05);}
+.leaflet-popup-content-wrapper{background:var(--surface)!important;border:1px solid var(--border)!important;color:var(--text)!important;border-radius:10px!important;box-shadow:0 4px 24px rgba(0,0,0,.6)!important;}
+.leaflet-popup-tip{background:var(--surface)!important;}
+.leaflet-popup-content{font-family:var(--body)!important;font-size:.83rem!important;}
+.popup-title{font-family:var(--head);font-size:1rem;letter-spacing:.05em;margin-bottom:.3rem;}
+.popup-meta{color:var(--text2);font-size:.72rem;}
+.cctv-marker-wrap{width:28px;height:28px;background:rgba(168,85,247,.9);border:2px solid var(--purple);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:.85rem;box-shadow:0 0 12px rgba(168,85,247,.5);}
+
+/* Responsive tweaks */
+@media(max-width:900px){
+  .sidebar{width:260px;min-width:260px;}
+  .admin-stats-grid{grid-template-columns:repeat(3,1fr);}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-indicator"></div>
+    ROAD<span>GUARD</span>
+  </div>
+  <div id="nn-banner" style="display:flex;align-items:center;gap:.5rem;background:rgba(14,165,233,.08);border:1px solid rgba(14,165,233,.25);border-radius:8px;padding:.3rem .8rem;font-size:.72rem;color:var(--accent3);">
+    🏛 <strong>Nagar Nigam Sitamarhi</strong> &nbsp;·&nbsp; PIN 843302 &nbsp;·&nbsp; Bihar
+  </div>
+  <nav id="main-nav">
+    <button class="active" onclick="switchView('map')"><span class="nav-icon">🗺</span>Live Map</button>
+    <button onclick="switchView('report')"><span class="nav-icon">📷</span>Report</button>
+    <button onclick="switchView('cctv')"><span class="nav-icon">📹</span>CCTV</button>
+    <button onclick="switchView('repair')"><span class="nav-icon">🔧</span>Repairs</button>
+    <button onclick="switchView('analytics')"><span class="nav-icon">📊</span>Analytics</button>
+    <button onclick="switchView('admin')"><span class="nav-icon">⚙️</span>Admin</button>
+    <button onclick="switchView('govt')"><span class="nav-icon">🏛</span>Government</button>
+  </nav>
+  <div class="header-right">
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      <span id="live-count">0</span> active
+      &nbsp;|&nbsp;
+      <span id="header-clock">--:--</span>
+    </div>
+    <button class="notification-btn" onclick="toggleNotif()">🔔<span class="notif-badge" id="notif-badge">3</span></button>
+  </div>
+</header>
+
+<main>
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-tabs">
+      <button class="sidebar-tab active" onclick="setSidebarTab('reports',this)">Reports</button>
+      <button class="sidebar-tab" onclick="setSidebarTab('cctv',this)">CCTV</button>
+      <button class="sidebar-tab" onclick="setSidebarTab('teams',this)">Teams</button>
+    </div>
+    <div id="sidebar-reports">
+      <div class="sidebar-header">
+        <div class="stats-grid">
+          <div class="stat-chip"><div class="num red" id="s-severe">0</div><div class="lbl">Severe</div></div>
+          <div class="stat-chip"><div class="num yellow" id="s-moderate">0</div><div class="lbl">Moderate</div></div>
+          <div class="stat-chip"><div class="num blue" id="s-minor">0</div><div class="lbl">Minor</div></div>
+          <div class="stat-chip"><div class="num green" id="s-fixed">0</div><div class="lbl">Fixed</div></div>
+        </div>
+      </div>
+      <div class="reports-scroll" id="reports-list"></div>
+    </div>
+    <div id="sidebar-cctv" style="display:none;flex:1;overflow-y:auto;padding:.6rem;">
+      <div style="padding:.5rem 0 .3rem;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--purple);">📹 Camera Feeds</div>
+      <div id="sidebar-cctv-list"></div>
+    </div>
+    <div id="sidebar-teams" style="display:none;flex:1;overflow-y:auto;padding:.6rem;">
+      <div style="padding:.5rem 0 .3rem;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--accent3);">👷 Repair Teams</div>
+      <div id="sidebar-teams-list"></div>
+    </div>
+  </aside>
+
+  <!-- MAP PANEL -->
+  <div class="panel active" id="map-panel" style="position:relative;">
+    <div id="map"></div>
+    <div class="map-overlay">
+      <button class="map-btn active" onclick="setMapFilter('all',this)">All</button>
+      <button class="map-btn" onclick="setMapFilter('severe',this)">🔴 Severe</button>
+      <button class="map-btn" onclick="setMapFilter('moderate',this)">🟡 Moderate</button>
+      <button class="map-btn" onclick="setMapFilter('minor',this)">🔵 Minor</button>
+      <button class="map-btn" onclick="setMapFilter('fixed',this)">🟢 Fixed</button>
+      <button class="map-btn" onclick="toggleCCTVLayer(this)" style="border-color:rgba(168,85,247,.4);color:var(--purple);">📹 CCTV</button>
+    </div>
+    <div class="map-cctv-overlay" id="cctv-map-panel" style="display:none;">
+      <div class="cctv-label">📹 Live Cameras</div>
+      <div id="cctv-map-list"></div>
+    </div>
+    <div class="map-legend">
+      <div class="legend-title">Map Legend</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>Severe Damage</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f5a623"></div>Moderate</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div>Minor</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div>Fixed</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#a855f7;border-radius:2px"></div>CCTV Camera</div>
+    </div>
+  </div>
+
+  <!-- REPORT PANEL -->
+  <div class="panel" id="report-panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">📷 Report Damage</div>
+        <div class="panel-sub">Submit a road damage incident — authorities are notified instantly</div>
+      </div>
+      <div style="display:flex;gap:.5rem">
+        <span class="tag tag-new">Offline Support</span>
+        <span class="tag tag-ai">AI Analysis</span>
+      </div>
+    </div>
+    <div class="report-content">
+      <div class="full">
+        <div class="form-section-title">📍 GPS Location</div>
+        <div class="gps-display">
+          <div style="font-size:1.2rem">📡</div>
+          <div style="flex:1">
+            <div class="gps-coords" id="gps-coords">Not captured yet</div>
+            <div class="gps-status" id="gps-status">Click to detect your GPS location</div>
+          </div>
+          <button class="gps-btn" onclick="getGPS()">📍 Detect</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Ward / Area *</label>
+        <select id="f-village">
+          <option value="">— Select Ward / Area —</option>
+          <option>Sitamarhi Sadar</option>
+          <option>Lalbazar Ward</option>
+          <option>Dumra Road</option>
+          <option>Station Road Area</option>
+          <option>Riga</option>
+          <option>Bajpatti</option>
+          <option>Bairgania</option>
+          <option>Pupri</option>
+          <option>Sursand</option>
+          <option>Nanpur</option>
+          <option>Majorganj</option>
+          <option>Parihar</option>
+          <option>Runnisaidpur</option>
+          <option>Sonbarsa</option>
+          <option>Other Area</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Road / Landmark *</label>
+        <input type="text" id="f-road" placeholder="e.g. NH-77, Station Road, Lalbazar Road">
+      </div>
+      <div class="form-group">
+        <label>Severity</label>
+        <select id="f-severity">
+          <option value="severe">🔴 Severe — Emergency</option>
+          <option value="moderate" selected>🟡 Moderate — Significant</option>
+          <option value="minor">🔵 Minor — Surface damage</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Damage Type</label>
+        <select id="f-type">
+          <option>Pothole</option>
+          <option>Surface Crack</option>
+          <option>Road Collapse</option>
+          <option>Waterlogging</option>
+          <option>Missing Markings</option>
+          <option>Damaged Guardrail</option>
+          <option>Flooding</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label>Description</label>
+        <textarea id="f-desc" placeholder="Describe the damage in detail — size, traffic impact, injuries, time of occurrence..."></textarea>
+      </div>
+      <div class="full">
+        <div class="form-section-title">📸 Photo Evidence</div>
+        <div class="upload-zone" id="upload-zone">
+          <div style="font-size:2rem;margin-bottom:.4rem">📷</div>
+          <div style="font-size:.83rem;color:var(--text2)">Drag & drop or <strong style="color:var(--accent)">click to upload</strong><br><small style="opacity:.6">JPG, PNG up to 10MB — AI will analyze severity</small></div>
+          <input type="file" id="photo-input" accept="image/*" multiple onchange="handlePhotos(event)">
+        </div>
+        <div class="photo-preview" id="photo-preview"></div>
+      </div>
+      <div class="form-group">
+        <label>Your Name</label>
+        <input type="text" id="f-name" placeholder="Reporter name">
+      </div>
+      <div class="form-group">
+        <label>Contact (Phone/Email)</label>
+        <input type="text" id="f-contact" placeholder="For SMS status updates">
+      </div>
+      <div class="form-group">
+        <label>Near CCTV Camera?</label>
+        <select id="f-cctv">
+          <option value="">None / Not sure</option>
+          <option value="CAM-001">CAM-001 — Station Road Gate</option>
+          <option value="CAM-002">CAM-002 — Bus Stand Dumra Road</option>
+          <option value="CAM-003">CAM-003 — Riga Bazaar Chowk</option>
+          <option value="CAM-004">CAM-004 — Sursand NH-77</option>
+          <option value="CAM-005">CAM-005 — Lalbazar Road</option>
+          <option value="CAM-006">CAM-006 — Dumra Chowk</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Priority Override</label>
+        <select id="f-priority">
+          <option value="normal">Normal — Standard processing</option>
+          <option value="urgent">🚨 Urgent — Emergency vehicles affected</option>
+          <option value="critical">🔥 Critical — Immediate hazard</option>
+        </select>
+      </div>
+      <div class="full" style="padding-top:.4rem">
+        <div style="background:rgba(14,165,233,.06);border:1px solid rgba(14,165,233,.2);border-radius:10px;padding:.9rem 1rem;margin-bottom:.8rem;">
+          <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem">
+            <span style="font-size:1rem">🏛</span>
+            <span style="font-size:.82rem;font-weight:600;color:var(--accent3)">Send to Nagar Nigam Sitamarhi</span>
+          </div>
+          <div style="font-size:.75rem;color:var(--text2);margin-bottom:.6rem">Your report + photos will be directly emailed to <strong style="color:var(--text)">nagarnigam.sitamarhi@bihar.gov.in</strong> with a reference number for official action.</div>
+          <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.8rem;color:var(--text)">
+            <input type="checkbox" id="f-send-nn" checked style="width:15px;height:15px;accent-color:var(--accent3);background:var(--surface2);border:1px solid var(--border);cursor:pointer;">
+            <span>✅ Automatically notify <strong>Nagar Nigam Sitamarhi</strong> on submission</span>
+          </label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:.6rem">
+          <button class="submit-btn" onclick="submitReport()">🚨 Submit Report</button>
+          <button class="submit-btn" style="background:var(--accent3);width:auto;padding:.85rem 1.2rem;white-space:nowrap" onclick="submitAndSendNN()">📤 Submit + Send to Nagar Nigam</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CCTV PANEL -->
+  <div class="panel" id="cctv-panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">📹 CCTV Surveillance</div>
+        <div class="panel-sub">Live camera feeds with AI incident detection</div>
+      </div>
+      <div style="display:flex;gap:.5rem;align-items:center">
+        <span class="tag tag-cctv">6 Cameras</span>
+        <span class="tag tag-ai">AI Detection ON</span>
+        <button class="filter-btn" style="font-size:.75rem" onclick="showAddCameraModal()">+ Add Camera</button>
+      </div>
+    </div>
+    <div class="cctv-content">
+      <div class="section-divider">Live Feeds</div>
+      <div class="cctv-grid" id="cctv-grid"></div>
+      <div class="section-divider">Recent AI Alerts</div>
+      <div class="cctv-alerts" id="cctv-alerts"></div>
+    </div>
+  </div>
+
+  <!-- REPAIR TRACKING PANEL -->
+  <div class="panel" id="repair-panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">🔧 Repair Tracking</div>
+        <div class="panel-sub">Monitor repair progress and team assignments</div>
+      </div>
+      <div style="display:flex;gap:.4rem;">
+        <select id="repair-filter" onchange="renderRepairPanel()" style="font-size:.78rem;padding:.3rem .6rem;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;">
+          <option value="all">All Reports</option>
+          <option value="submitted">New</option>
+          <option value="under_review">Under Review</option>
+          <option value="repair_scheduled">Scheduled</option>
+          <option value="fixed">Completed</option>
+        </select>
+      </div>
+    </div>
+    <div class="repair-content" id="repair-content"></div>
+  </div>
+
+  <!-- ANALYTICS PANEL -->
+  <div class="panel" id="analytics-panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">📊 Analytics & Insights</div>
+        <div class="panel-sub">Infrastructure performance and damage trends</div>
+      </div>
+    </div>
+    <div class="analytics-content">
+      <div class="analytics-grid">
+        <div class="chart-card">
+          <div class="chart-title">Reports by Damage Type</div>
+          <div class="bar-chart" id="chart-types"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Reports by Village</div>
+          <div class="bar-chart" id="chart-villages"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Status Distribution</div>
+          <div style="display:flex;gap:1.2rem;align-items:center">
+            <div class="donut-wrap">
+              <svg width="120" height="120" viewBox="0 0 120 120" id="donut-svg"></svg>
+              <div class="donut-center">
+                <div class="donut-num" id="donut-total">0</div>
+                <div class="donut-lbl">Total</div>
+              </div>
+            </div>
+            <div id="donut-legend" style="display:flex;flex-direction:column;gap:.45rem;"></div>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Resolution Rate (7 days)</div>
+          <div id="chart-resolution" style="display:flex;flex-direction:column;gap:.55rem;margin-top:.5rem;"></div>
+        </div>
+      </div>
+      <div class="section-divider">Recent Activity</div>
+      <div class="timeline-card">
+        <div class="timeline" id="activity-timeline"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADMIN PANEL -->
+  <div class="panel" id="admin-panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">⚙️ Admin Dashboard</div>
+        <div class="panel-sub">Full control over reports, teams and infrastructure</div>
+      </div>
+      <div style="font-family:var(--mono);font-size:.72rem;color:var(--text2)">Updated: <span id="last-updated">--:--</span></div>
+    </div>
+    <div class="admin-content">
+      <div class="admin-stats-grid">
+        <div class="admin-stat s-total">
+          <div class="admin-stat-num" style="color:var(--accent)" id="a-total">0</div>
+          <div class="admin-stat-lbl">Total Reports</div>
+        </div>
+        <div class="admin-stat s-pending">
+          <div class="admin-stat-num" style="color:var(--red)" id="a-pending">0</div>
+          <div class="admin-stat-lbl">Pending</div>
+        </div>
+        <div class="admin-stat s-review">
+          <div class="admin-stat-num" style="color:var(--yellow)" id="a-review">0</div>
+          <div class="admin-stat-lbl">Under Review</div>
+        </div>
+        <div class="admin-stat s-scheduled">
+          <div class="admin-stat-num" style="color:var(--purple)" id="a-scheduled">0</div>
+          <div class="admin-stat-lbl">Scheduled</div>
+        </div>
+        <div class="admin-stat s-fixed">
+          <div class="admin-stat-num" style="color:var(--green)" id="a-fixed">0</div>
+          <div class="admin-stat-lbl">Repaired</div>
+        </div>
+      </div>
+      <div class="section-header">
+        <div class="section-title">All Reports</div>
+        <div class="filter-row">
+          <button class="filter-btn active" onclick="filterAdmin('all',this)">All</button>
+          <button class="filter-btn" onclick="filterAdmin('submitted',this)">New</button>
+          <button class="filter-btn" onclick="filterAdmin('under_review',this)">Review</button>
+          <button class="filter-btn" onclick="filterAdmin('repair_scheduled',this)">Scheduled</button>
+          <button class="filter-btn" onclick="filterAdmin('fixed',this)">Fixed</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th><th>Location</th><th>Type</th><th>Severity</th>
+                <th>Status</th><th>Team</th><th>Nagar Nigam</th><th>Date</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="admin-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="section-divider">Repair Teams</div>
+      <div class="table-wrap">
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr><th>Team</th><th>Head</th><th>Status</th><th>Current Job</th><th>Contact</th></tr>
+            </thead>
+            <tbody id="teams-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GOVERNMENT PANEL -->
+  <div class="panel" id="govt-panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">🏛 Government Integration</div>
+        <div class="panel-sub">Connect with authorities, escalate issues, generate official reports</div>
+      </div>
+    </div>
+    <div class="govt-content">
+      <div class="section-divider">Connected Departments</div>
+      <div id="dept-list"></div>
+      <div class="section-divider">Escalate Issue</div>
+      <div class="escalation-form">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;">
+          <div class="form-group">
+            <label>Report ID</label>
+            <select id="esc-report" style="font-size:.83rem;padding:.5rem .7rem;background:var(--surface3);border:1px solid var(--border);color:var(--text);border-radius:7px;"></select>
+          </div>
+          <div class="form-group">
+            <label>Department</label>
+            <select id="esc-dept" style="font-size:.83rem;padding:.5rem .7rem;background:var(--surface3);border:1px solid var(--border);color:var(--text);border-radius:7px;">
+              <option>PWD — Public Works</option>
+              <option>NHAI — National Highways</option>
+              <option>Municipal Corp.</option>
+              <option>District Collector</option>
+            </select>
+          </div>
+          <div class="form-group" style="grid-column:1/-1;">
+            <label>Message</label>
+            <textarea id="esc-msg" style="font-size:.83rem;padding:.55rem .8rem;background:var(--surface3);border:1px solid var(--border);color:var(--text);border-radius:7px;min-height:70px;resize:vertical;" placeholder="Describe urgency and required action..."></textarea>
+          </div>
+        </div>
+        <div style="display:flex;gap:.6rem;margin-top:.8rem;">
+          <button class="modal-btn primary" onclick="escalateIssue()">📤 Escalate to Authority</button>
+          <button class="modal-btn ghost" onclick="generateReport()">📄 Generate Official Report</button>
+        </div>
+      </div>
+      <div class="section-divider">Escalation Log</div>
+      <div class="table-wrap">
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Date</th><th>Report</th><th>Department</th><th>Status</th><th>Response</th></tr></thead>
+            <tbody id="escalation-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- Notifications Panel -->
+<div class="notif-panel" id="notif-panel">
+  <div class="notif-header">
+    <div class="notif-title">🔔 Notifications</div>
+    <button class="notif-close" onclick="toggleNotif()">✕</button>
+  </div>
+  <div id="notif-list"></div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="closeModal(event)">
+  <div class="modal" id="modal">
+    <div class="modal-title" id="modal-title">Report Details</div>
+    <div id="modal-body"></div>
+    <div class="modal-actions" id="modal-actions"></div>
+  </div>
+</div>
+
+<!-- CCTV Modal -->
+<div class="modal-backdrop" id="cctv-modal-backdrop" onclick="closeCCTVModal(event)">
+  <div class="modal" id="cctv-modal" style="max-width:680px;">
+    <div class="modal-title" id="cctv-modal-title">Camera Feed</div>
+    <div class="cctv-modal-screen">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(0,255,0,.02),rgba(0,255,0,.02) 1px,transparent 1px,transparent 3px);pointer-events:none;z-index:2;"></div>
+      <div class="scan-line"></div>
+      <div style="font-size:3rem;opacity:.08">📹</div>
+      <div class="cctv-live-badge"><span style="width:6px;height:6px;background:#fff;border-radius:50%;animation:breathe .6s infinite;display:inline-block;"></span> LIVE</div>
+    </div>
+    <div id="cctv-modal-body"></div>
+    <div class="modal-actions">
+      <button class="modal-btn primary" onclick="closeCCTVModal()">Close</button>
+      <button class="modal-btn ghost" onclick="showToast('📹 Footage','Download started for last 30 minutes...')">📥 Download Footage</button>
+      <button class="modal-btn ghost" onclick="showToast('🚨 Alert','Incident flagged for review.')">🚨 Flag Incident</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <div class="toast-title" id="toast-title"></div>
+  <div class="toast-body" id="toast-body"></div>
+</div>
+
+<script>
+// ════════════════════════════════════
+//  DATA STORE
+// ════════════════════════════════════
+// ── SITAMARHI, BIHAR — PIN 843302 ──
+// Map center: 26.5939° N, 85.4890° E
+let reports = [
+  {id:'RG-001',village:'Sitamarhi Sadar',road:'Station Road, near Sitamarhi Railway Station',severity:'severe',type:'Road Collapse',
+   desc:'Large section of road collapsed near railway station gate. Ambulances and emergency vehicles cannot pass. Heavy vehicle movement has worsened the damage after monsoon rains.',
+   lat:26.5960,lng:85.4892,status:'repair_scheduled',reporter:'Ramesh Kumar Yadav',contact:'9876543210',
+   date:'2026-03-01',photos:[],team:'Team Alpha',cctv:'CAM-001',priority:'critical',
+   nnSent:true,nnDate:'2026-03-01',nnRef:'NN-2026-001'},
+  {id:'RG-002',village:'Dumra Road',road:'Dumra Road, near Bus Stand Sitamarhi',severity:'moderate',type:'Pothole',
+   desc:'Multiple large potholes near Sitamarhi Bus Stand. At least 2 two-wheeler accidents this week. Buses forced to slow significantly.',
+   lat:26.5920,lng:85.4850,status:'under_review',reporter:'Priya Devi',contact:'9876500001',
+   date:'2026-03-02',photos:[],team:null,cctv:'CAM-002',priority:'urgent',
+   nnSent:true,nnDate:'2026-03-02',nnRef:'NN-2026-002'},
+  {id:'RG-003',village:'Bairgania',road:'NH-104, Bairgania to Sitamarhi stretch',severity:'minor',type:'Surface Crack',
+   desc:'Surface cracks developing along NH-104 near Bairgania junction. Risk of major pothole formation before next monsoon.',
+   lat:26.5680,lng:85.5100,status:'submitted',reporter:'Suresh Paswan',contact:'suresh.b@gmail.com',
+   date:'2026-03-03',photos:[],team:null,cctv:null,priority:'normal',
+   nnSent:false,nnDate:null,nnRef:null},
+  {id:'RG-004',village:'Riga',road:'Riga Bazaar Main Road, near water tank',severity:'severe',type:'Pothole',
+   desc:'Deep water-filled potholes invisible after rain. Caused serious accident to a schoolchild on cycle. Night travel extremely dangerous.',
+   lat:26.6100,lng:85.4700,status:'under_review',reporter:'Anita Devi',contact:'9765432100',
+   date:'2026-03-04',photos:[],team:'Team Beta',cctv:'CAM-003',priority:'critical',
+   nnSent:true,nnDate:'2026-03-04',nnRef:'NN-2026-003'},
+  {id:'RG-005',village:'Pupri',road:'Pupri Road, near Pupri Block Office',severity:'moderate',type:'Waterlogging',
+   desc:'Road dips near block office cause 2-3 days of waterlogging after any rain. Access to government offices blocked.',
+   lat:26.4680,lng:85.7060,status:'submitted',reporter:'Vijay Kumar Singh',contact:'9988776655',
+   date:'2026-03-05',photos:[],team:null,cctv:null,priority:'urgent',
+   nnSent:false,nnDate:null,nnRef:null},
+  {id:'RG-006',village:'Sitamarhi Sadar',road:'Lalbazar Road, near Shiv Mandir',severity:'fixed',type:'Pothole',
+   desc:'Pothole repaired by Nagar Nigam Team Alpha. Road now smooth. Community feedback positive.',
+   lat:26.5930,lng:85.4910,status:'fixed',reporter:'Rekha Verma',contact:'9123456789',
+   date:'2026-02-20',photos:[],team:'Team Alpha',cctv:'CAM-001',priority:'normal',
+   nnSent:true,nnDate:'2026-02-20',nnRef:'NN-2026-004'},
+  {id:'RG-007',village:'Bajpatti',road:'Bajpatti-Sitamarhi link road',severity:'moderate',type:'Surface Crack',
+   desc:'Long stretch of surface cracking along school road. Children walk daily. Needs urgent attention before monsoon.',
+   lat:26.5500,lng:85.4600,status:'submitted',reporter:'Anonymous',contact:'N/A',
+   date:'2026-03-06',photos:[],team:null,cctv:null,priority:'normal',
+   nnSent:false,nnDate:null,nnRef:null},
+  {id:'RG-008',village:'Sursand',road:'Sursand Chowk, NH-77',severity:'severe',type:'Road Collapse',
+   desc:'NH-77 section near Sursand chowk collapsed completely. Heavy trucks diverted but local traffic severely affected.',
+   lat:26.6300,lng:85.7200,status:'under_review',reporter:'Mohan Lal',contact:'9811223344',
+   date:'2026-03-06',photos:[],team:null,cctv:'CAM-004',priority:'critical',
+   nnSent:true,nnDate:'2026-03-06',nnRef:'NN-2026-005'},
+];
+
+const cameras = [
+  {id:'CAM-001',name:'Station Road Cam',lat:26.5958,lng:85.4888,online:true,alerts:3,location:'Sitamarhi Railway Station Gate'},
+  {id:'CAM-002',name:'Bus Stand Cam',lat:26.5922,lng:85.4848,online:true,alerts:1,location:'Sitamarhi Bus Stand, Dumra Road'},
+  {id:'CAM-003',name:'Riga Bazaar Cam',lat:26.6098,lng:85.4698,online:true,alerts:2,location:'Riga Bazaar Chowk'},
+  {id:'CAM-004',name:'Sursand NH-77 Cam',lat:26.6298,lng:85.7198,online:false,alerts:0,location:'NH-77 Sursand Junction'},
+  {id:'CAM-005',name:'Lalbazar Cam',lat:26.5928,lng:85.4908,online:true,alerts:1,location:'Lalbazar Road, Sitamarhi Sadar'},
+  {id:'CAM-006',name:'Dumra Chowk Cam',lat:26.5610,lng:85.5320,online:true,alerts:0,location:'Dumra Town Chowk'},
+];
+
+const teams = [
+  {id:'T-01',name:'Team Alpha',head:'Rajendra Meena',status:'active',job:'RG-001 — Rampur collapse',contact:'9876001001'},
+  {id:'T-02',name:'Team Beta',head:'Sunil Sharma',status:'active',job:'RG-004 — Laxmi Nagar',contact:'9876002002'},
+  {id:'T-03',name:'Team Gamma',head:'Kavita Singh',status:'available',job:'—',contact:'9876003003'},
+  {id:'T-04',name:'Team Delta',head:'Arun Patel',status:'standby',job:'—',contact:'9876004004'},
+];
+
+const notifications = [
+  {id:1,text:'New SEVERE report submitted — RG-007 Kho Nagor',time:'2 min ago',type:'report',unread:true},
+  {id:2,text:'CAM-001 detected roadblock on NH-48',time:'15 min ago',type:'cctv',unread:true},
+  {id:3,text:'RG-001 repair scheduled — Team Alpha assigned',time:'1 hr ago',type:'repair',unread:true},
+  {id:4,text:'RG-006 marked as fixed — Rampur NH-48',time:'3 hr ago',type:'fixed',unread:false},
+  {id:5,text:'PWD acknowledged escalation for RG-002',time:'5 hr ago',type:'govt',unread:false},
+];
+
+const cctvAlerts = [
+  {cam:'CAM-001',time:'09:32',type:'Roadblock Detected',desc:'Vehicle breakdown blocking gate area — Station Road, Sitamarhi',severity:'moderate'},
+  {cam:'CAM-001',time:'08:11',type:'Heavy Congestion',desc:'Traffic backed up 400m near Station Road — pothole avoidance detected',severity:'minor'},
+  {cam:'CAM-002',time:'07:55',type:'Pothole Impact',desc:'Multiple vehicles swerving near Bus Stand, Dumra Road — new pothole suspected',severity:'severe'},
+  {cam:'CAM-005',time:'06:30',type:'Waterlogging',desc:'Standing water on Lalbazar Road — road dip accumulation',severity:'moderate'},
+  {cam:'CAM-003',time:'Yesterday',type:'Night Accident Risk',desc:'AI detected unlit pothole zone — Riga Bazaar Chowk, no street lights',severity:'severe'},
+];
+
+const escalations = [
+  {date:'2026-03-04',report:'RG-001',dept:'Nagar Nigam Sitamarhi',status:'Acknowledged',response:'Repair team dispatched on 2026-03-06'},
+  {date:'2026-03-04',report:'RG-008',dept:'NHAI — NH-77',status:'Under Review',response:'NH-77 Sursand assessment pending'},
+  {date:'2026-03-03',report:'RG-002',dept:'PWD Bihar — Sitamarhi',status:'Under Review',response:'Site assessment scheduled'},
+  {date:'2026-03-02',report:'RG-004',dept:'Nagar Nigam Sitamarhi',status:'Acknowledged',response:'Team Beta assigned for Riga Bazaar'},
+  {date:'2026-02-20',report:'RG-006',dept:'Nagar Nigam Sitamarhi',status:'Closed',response:'Pothole repaired. Road reopened.'},
+];
+
+const departments = [
+  {icon:'🏛',name:'Nagar Nigam Sitamarhi',status:'Connected',contact:'nagarnigam.sitamarhi@bihar.gov.in',phone:'06226-242001',reports:6,primary:true},
+  {icon:'🏗',name:'PWD Bihar — Sitamarhi Division',status:'Connected',contact:'pwd.sitamarhi@bihar.gov.in',phone:'06226-242100',reports:4,primary:false},
+  {icon:'🛣',name:'NHAI — NH-77 / NH-104',status:'Connected',contact:'nhai.northbihar@gov.in',phone:'1800-116886',reports:2,primary:false},
+  {icon:'📋',name:'DM Office — Sitamarhi',status:'Pending MoU',contact:'dm-sitamarhi@bihar.gov.in',phone:'06226-242000',reports:0,primary:false},
+  {icon:'🚒',name:'Emergency Services Sitamarhi',status:'Connected',contact:'fire.sitamarhi@bihar.gov.in',phone:'101',reports:1,primary:false},
+];
+
+const statusLabels = {submitted:'Submitted',under_review:'Under Review',repair_scheduled:'Scheduled',fixed:'Fixed'};
+const statusColors = {
+  submitted:{dot:'#3b82f6',text:'#3b82f6'},
+  under_review:{dot:'#f5a623',text:'#f5a623'},
+  repair_scheduled:{dot:'#a855f7',text:'#a855f7'},
+  fixed:{dot:'#22c55e',text:'#22c55e'}
+};
+
+let map, markers={}, cctvMarkers={}, currentFilter='all', adminFilter='all';
+let gpsLat=null, gpsLng=null, photoFiles=[];
+let cctvLayerVisible=false;
+
+// ════════════════════════════════════
+//  INIT
+// ════════════════════════════════════
+window.onload = ()=>{
+  initMap();
+  renderAll();
+  renderCCTVGrid();
+  renderCCTVAlerts();
+  renderRepairPanel();
+  renderAnalytics();
+  renderAdminTeams();
+  renderDepts();
+  renderNotifs();
+  renderEscalations();
+  renderSidebarCCTV();
+  renderSidebarTeams();
+  setInterval(updateClock, 1000);
+  updateClock();
+};
+
+function updateClock(){
+  const now = new Date();
+  const t = now.toLocaleTimeString('en-IN',{hour12:false});
+  const el1 = document.getElementById('header-clock');
+  const el2 = document.getElementById('last-updated');
+  if(el1) el1.textContent = t;
+  if(el2) el2.textContent = t;
+}
+
+function renderAll(){
+  renderSidebar(); renderMapMarkers(); renderAdminTable(); updateStats();
+}
+
+// ════════════════════════════════════
+//  MAP
+// ════════════════════════════════════
+function initMap(){
+  map = L.map('map',{zoomControl:false}).setView([26.5939, 85.4890], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM',maxZoom:19}).addTo(map);
+  L.control.zoom({position:'bottomright'}).addTo(map);
+  renderMapMarkers();
+}
+
+function renderMapMarkers(){
+  Object.values(markers).forEach(m=>map.removeLayer(m));
+  markers={};
+  const col={severe:'#ef4444',moderate:'#f5a623',minor:'#3b82f6',fixed:'#22c55e'};
+  reports.forEach(r=>{
+    const sev = r.status==='fixed'?'fixed':r.severity;
+    const c = col[sev];
+    const icon = L.divIcon({
+      className:'',
+      html:`<div style="width:22px;height:22px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${c};border:2px solid ${c};box-shadow:0 0 10px ${c}88;"></div>`,
+      iconSize:[22,22],iconAnchor:[11,22]
+    });
+    const m = L.marker([r.lat,r.lng],{icon}).addTo(map);
+    const sc = statusColors[r.status]||{dot:'#888',text:'#888'};
+    m.bindPopup(`
+      <div class="popup-title">${r.village} — ${r.type}</div>
+      <div class="popup-meta">${r.road}</div>
+      <div style="margin:.4rem 0;font-size:.78rem;line-height:1.4">${r.desc.slice(0,90)}...</div>
+      <div style="display:flex;align-items:center;gap:.4rem;margin-top:.4rem">
+        <span style="width:6px;height:6px;background:${sc.dot};border-radius:50%;display:inline-block"></span>
+        <span style="color:${sc.text};font-size:.72rem;font-weight:600">${statusLabels[r.status]}</span>
+        ${r.cctv?`<span class="tag tag-cctv" style="margin-left:.4rem">📹 ${r.cctv}</span>`:''}
+      </div>
+      <button onclick="viewReport('${r.id}')" style="margin-top:.5rem;background:var(--accent);border:none;color:#000;padding:.25rem .6rem;border-radius:5px;font-size:.72rem;font-weight:600;cursor:pointer;">Details</button>
+    `);
+    m.on('click',()=>focusReport(r));
+    if(currentFilter==='all'||sev===currentFilter) markers[r.id]=m;
+    else map.removeLayer(m);
+  });
+}
+
+function renderCCTVMarkers(){
+  cameras.forEach(c=>{
+    const icon = L.divIcon({
+      className:'',
+      html:`<div class="cctv-marker-wrap" title="${c.name}">📹</div>`,
+      iconSize:[28,28],iconAnchor:[14,14]
+    });
+    const m = L.marker([c.lat,c.lng],{icon}).addTo(map);
+    m.bindPopup(`<div class="popup-title">${c.id} — ${c.name}</div><div class="popup-meta">${c.location}</div><div style="margin-top:.4rem;display:flex;align-items:center;gap:.4rem"><span style="width:6px;height:6px;background:${c.online?'#22c55e':'#ef4444'};border-radius:50%"></span><span style="font-size:.72rem">${c.online?'Online':'Offline'}</span></div><button onclick="openCCTV('${c.id}')" style="margin-top:.5rem;background:var(--purple);border:none;color:#fff;padding:.25rem .6rem;border-radius:5px;font-size:.72rem;cursor:pointer;">View Feed</button>`);
+    cctvMarkers[c.id] = m;
+  });
+  // CCTV map list
+  const el = document.getElementById('cctv-map-list');
+  if(el) el.innerHTML = cameras.map(c=>`
+    <div class="cctv-camera-item" onclick="openCCTV('${c.id}')">
+      <div class="cctv-status-dot ${c.online?'cctv-online':'cctv-offline'}"></div>
+      <span style="color:var(--text);font-size:.72rem">${c.id} — ${c.name}</span>
+    </div>`).join('');
+}
+
+function toggleCCTVLayer(btn){
+  cctvLayerVisible = !cctvLayerVisible;
+  if(cctvLayerVisible){
+    btn.classList.add('active');btn.style.background='rgba(168,85,247,.8)';btn.style.borderColor='var(--purple)';btn.style.color='#fff';
+    renderCCTVMarkers();
+    document.getElementById('cctv-map-panel').style.display='block';
+  } else {
+    btn.classList.remove('active');btn.style.background='';btn.style.borderColor='';btn.style.color='var(--purple)';
+    Object.values(cctvMarkers).forEach(m=>map.removeLayer(m));
+    cctvMarkers={};
+    document.getElementById('cctv-map-panel').style.display='none';
+  }
+}
+
+function setMapFilter(f,btn){
+  currentFilter=f;
+  document.querySelectorAll('.map-overlay .map-btn').forEach(b=>{
+    if(!b.style.borderColor.includes('purple')) b.classList.remove('active');
+  });
+  btn.classList.add('active');
+  renderMapMarkers(); renderSidebar();
+}
+
+function focusReport(r){
+  map.flyTo([r.lat,r.lng],16,{duration:.8});
+  const m=markers[r.id];
+  if(m) setTimeout(()=>m.openPopup(),900);
+  document.querySelectorAll('.report-card').forEach(c=>c.classList.remove('selected'));
+  const card=document.getElementById(`card-${r.id}`);
+  if(card){card.classList.add('selected');card.scrollIntoView({behavior:'smooth',block:'nearest'});}
+  switchView('map');
+}
+
+// ════════════════════════════════════
+//  SIDEBAR
+// ════════════════════════════════════
+function setSidebarTab(tab, btn){
+  document.querySelectorAll('.sidebar-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('sidebar-reports').style.display = tab==='reports'?'flex':'none';
+  if(tab==='reports') document.getElementById('sidebar-reports').style.flexDirection='column';
+  document.getElementById('sidebar-cctv').style.display = tab==='cctv'?'block':'none';
+  document.getElementById('sidebar-teams').style.display = tab==='teams'?'block':'none';
+}
+
+function renderSidebar(){
+  const list=document.getElementById('reports-list');
+  list.innerHTML='';
+  const filtered = currentFilter==='all'?reports:reports.filter(r=>currentFilter==='fixed'?r.status==='fixed':r.severity===currentFilter&&r.status!=='fixed');
+  filtered.forEach(r=>{
+    const sev=r.status==='fixed'?'fixed':r.severity;
+    const sc=statusColors[r.status]||{dot:'#888',text:'#888'};
+    const el=document.createElement('div');
+    el.className=`report-card ${sev}`;el.id=`card-${r.id}`;
+    el.innerHTML=`
+      <div class="card-row1">
+        <span class="card-id">${r.id}</span>
+        <div style="display:flex;gap:.3rem;align-items:center">
+          ${r.cctv?`<span class="tag tag-cctv" style="font-size:.6rem">${r.cctv}</span>`:''}
+          <span class="sev-badge badge-${sev}">${sev==='fixed'?'Fixed':sev.toUpperCase()}</span>
+        </div>
+      </div>
+      <div class="card-loc">📍 ${r.village} — ${r.road.slice(0,28)}</div>
+      <div class="card-desc">${r.desc.slice(0,75)}...</div>
+      <div class="card-footer">
+        <span><span class="status-dot-sm" style="background:${sc.dot}"></span><span style="color:${sc.text}">${statusLabels[r.status]}</span></span>
+        <span>${r.date}</span>
+      </div>`;
+    el.onclick=()=>focusReport(r);
+    list.appendChild(el);
+  });
+}
+
+function renderSidebarCCTV(){
+  const el=document.getElementById('sidebar-cctv-list');
+  el.innerHTML=cameras.map(c=>`
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.6rem .8rem;margin-bottom:.4rem;cursor:pointer;display:flex;align-items:center;gap:.6rem;" onclick="openCCTV('${c.id}')">
+      <span class="cctv-status-dot ${c.online?'cctv-online':'cctv-offline'}"></span>
+      <div style="flex:1">
+        <div style="font-size:.78rem;font-weight:500">${c.id} — ${c.name}</div>
+        <div style="font-size:.65rem;color:var(--text2)">${c.alerts?`⚠️ ${c.alerts} alert${c.alerts>1?'s':''}`:'No alerts'}</div>
+      </div>
+    </div>`).join('');
+}
+
+function renderSidebarTeams(){
+  const el=document.getElementById('sidebar-teams-list');
+  const sc={active:{color:'#22c55e'},available:{color:'#3b82f6'},standby:{color:'#f5a623'}};
+  el.innerHTML=teams.map(t=>`
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.6rem .8rem;margin-bottom:.4rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.2rem">
+        <span style="font-size:.78rem;font-weight:600">${t.name}</span>
+        <span style="font-size:.65rem;color:${sc[t.status]?.color||'#888'};text-transform:uppercase;letter-spacing:.04em">${t.status}</span>
+      </div>
+      <div style="font-size:.7rem;color:var(--text2)">👷 ${t.head}</div>
+      ${t.job!=='—'?`<div style="font-size:.68rem;color:var(--accent);margin-top:.2rem">📋 ${t.job}</div>`:''}
+    </div>`).join('');
+}
+
+// ════════════════════════════════════
+//  STATS
+// ════════════════════════════════════
+function updateStats(){
+  const counts={severe:0,moderate:0,minor:0,fixed:0};
+  const admin={total:reports.length,pending:0,review:0,scheduled:0,fixed:0};
+  reports.forEach(r=>{
+    if(r.status==='fixed')counts.fixed++;
+    else if(r.severity==='severe')counts.severe++;
+    else if(r.severity==='moderate')counts.moderate++;
+    else counts.minor++;
+    if(r.status==='submitted')admin.pending++;
+    if(r.status==='under_review')admin.review++;
+    if(r.status==='repair_scheduled')admin.scheduled++;
+    if(r.status==='fixed')admin.fixed++;
+  });
+  ['severe','moderate','minor','fixed'].forEach(k=>{
+    const el=document.getElementById(`s-${k}`);if(el)el.textContent=counts[k];
+  });
+  document.getElementById('live-count').textContent=reports.filter(r=>r.status!=='fixed').length;
+  ['total','pending','review','scheduled','fixed'].forEach(k=>{
+    const el=document.getElementById(`a-${k}`);if(el)el.textContent=admin[k];
+  });
+}
+
+// ════════════════════════════════════
+//  REPORT FORM
+// ════════════════════════════════════
+function getGPS(){
+  const st=document.getElementById('gps-status');
+  st.textContent='Locating…';
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(pos=>{
+      gpsLat=pos.coords.latitude.toFixed(5);
+      gpsLng=pos.coords.longitude.toFixed(5);
+      document.getElementById('gps-coords').textContent=`${gpsLat}, ${gpsLng}`;
+      st.textContent='✅ GPS captured';
+    },()=>simulateGPS());
+  } else simulateGPS();
+}
+function simulateGPS(){
+  gpsLat=(26.88+Math.random()*.08).toFixed(5);
+  gpsLng=(75.74+Math.random()*.12).toFixed(5);
+  document.getElementById('gps-coords').textContent=`${gpsLat}, ${gpsLng}`;
+  document.getElementById('gps-status').textContent='📍 Simulated location (enable for real GPS)';
+}
+
+function handlePhotos(e){
+  const files=Array.from(e.target.files);
+  photoFiles=[...photoFiles,...files];
+  const prev=document.getElementById('photo-preview');
+  files.forEach(f=>{
+    const img=document.createElement('img');img.className='photo-thumb';
+    img.src=URL.createObjectURL(f);prev.appendChild(img);
+  });
+  if(files.length) showToast('🤖 AI Analysis','Analyzing photo for damage severity...');
+}
+
+function submitReport(sendToNN=false){
+  const village=document.getElementById('f-village').value.trim();
+  const road=document.getElementById('f-road').value.trim();
+  if(!village||!road){showToast('⚠️ Missing Info','Please select ward/area and enter road name.');return;}
+  if(!gpsLat){showToast('📍 No GPS','Please capture GPS location first.');return;}
+  const nnChecked = document.getElementById('f-send-nn').checked;
+  const doSendNN = sendToNN || nnChecked;
+  const nnRef = doSendNN ? `NN-2026-${String(reports.length+100).padStart(3,'0')}` : null;
+  const nr={
+    id:`RG-${String(reports.length+1).padStart(3,'0')}`,village,road,
+    severity:document.getElementById('f-severity').value,
+    type:document.getElementById('f-type').value,
+    desc:document.getElementById('f-desc').value||'No description provided.',
+    lat:parseFloat(gpsLat),lng:parseFloat(gpsLng),
+    status:'submitted',
+    reporter:document.getElementById('f-name').value||'Anonymous',
+    contact:document.getElementById('f-contact').value||'N/A',
+    date:new Date().toISOString().split('T')[0],
+    photos:[],
+    team:null,
+    cctv:document.getElementById('f-cctv').value||null,
+    priority:document.getElementById('f-priority').value,
+    nnSent: doSendNN,
+    nnDate: doSendNN ? new Date().toISOString().split('T')[0] : null,
+    nnRef: nnRef,
+  };
+  reports.unshift(nr);
+  notifications.unshift({id:Date.now(),text:`New report ${nr.id} submitted — ${nr.village}, Sitamarhi`,time:'just now',type:'report',unread:true});
+  if(doSendNN){
+    notifications.unshift({id:Date.now()+1,text:`📤 Report ${nr.id} sent to Nagar Nigam Sitamarhi — Ref: ${nnRef}`,time:'just now',type:'govt',unread:true});
+  }
+  updateNotifBadge();
+  renderAll();renderNotifs();
+  if(doSendNN){
+    showToast('📤 Sent to Nagar Nigam!',`${nr.id} — Ref: ${nnRef} | nagarnigam.sitamarhi@bihar.gov.in notified`);
+  } else {
+    showToast('✅ Report Submitted!',`${nr.id} — Saved locally. Use "Send to NN" to escalate.`);
+  }
+  ['f-road','f-desc','f-name','f-contact'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-village').value='';
+  document.getElementById('photo-preview').innerHTML='';
+  document.getElementById('gps-coords').textContent='Not captured yet';
+  document.getElementById('gps-status').textContent='Click to detect your GPS location';
+  gpsLat=gpsLng=null;photoFiles=[];
+  setTimeout(()=>switchView('map'),1800);
+}
+
+function submitAndSendNN(){ submitReport(true); }
+
+// ════════════════════════════════════
+//  ADMIN TABLE
+// ════════════════════════════════════
+function renderAdminTable(){
+  const tbody=document.getElementById('admin-tbody');
+  tbody.innerHTML='';
+  const filtered=adminFilter==='all'?reports:reports.filter(r=>r.status===adminFilter);
+  filtered.forEach(r=>{
+    const sev=r.status==='fixed'?'fixed':r.severity;
+    const sc=statusColors[r.status]||{dot:'#888',text:'#888'};
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><span style="font-family:var(--mono);font-size:.72rem;color:var(--text2)">${r.id}</span>
+        ${r.priority==='critical'?'<span style="color:var(--red);font-size:.65rem;margin-left:.3rem">🔥</span>':r.priority==='urgent'?'<span style="color:var(--yellow);font-size:.65rem;margin-left:.3rem">🚨</span>':''}
+      </td>
+      <td><strong>${r.village}</strong><br><span style="color:var(--text2);font-size:.74rem">${r.road.slice(0,25)}</span></td>
+      <td style="color:var(--text2);font-size:.78rem">${r.type}</td>
+      <td><span class="sev-badge badge-${sev}">${sev.toUpperCase()}</span></td>
+      <td><span style="display:flex;align-items:center;gap:.3rem"><span style="width:5px;height:5px;background:${sc.dot};border-radius:50%;flex-shrink:0"></span><span style="color:${sc.text};font-size:.78rem">${statusLabels[r.status]||r.status}</span></span></td>
+      <td style="font-size:.78rem">${r.team?`<span style="color:var(--accent3)">${r.team}</span>`:'<span style="color:var(--text3)">—</span>'}</td>
+      <td>${r.nnSent?`<span style="font-size:.7rem;color:#22c55e;font-weight:600">✅ ${r.nnRef||'Sent'}</span>`:`<button class="action-btn" style="font-size:.68rem;border-color:rgba(14,165,233,.4);color:var(--accent3)" onclick="sendToNagarNigam('${r.id}')">📤 Send NN</button>`}</td>
+      <td style="font-family:var(--mono);font-size:.72rem;color:var(--text2)">${r.date}</td>
+      <td>
+        <button class="action-btn" onclick="viewReport('${r.id}')">View</button>
+        ${r.status!=='fixed'?`<button class="action-btn success" onclick="markFixed('${r.id}')">✓ Fixed</button>`:''}
+        ${r.status==='submitted'?`<button class="action-btn purple" onclick="scheduleRepair('${r.id}')">Schedule</button>`:''}
+        ${r.status==='under_review'?`<button class="action-btn" onclick="updateStatus('${r.id}','repair_scheduled')">→ Schedule</button>`:''}
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderAdminTeams(){
+  const tbody=document.getElementById('teams-tbody');
+  if(!tbody)return;
+  const sc={active:'#22c55e',available:'#3b82f6',standby:'#f5a623'};
+  tbody.innerHTML=teams.map(t=>`
+    <tr>
+      <td><strong>${t.name}</strong></td>
+      <td style="font-size:.82rem">${t.head}</td>
+      <td><span style="color:${sc[t.status]||'#888'};font-size:.78rem;font-weight:600;text-transform:uppercase">${t.status}</span></td>
+      <td style="font-size:.78rem;color:var(--text2)">${t.job}</td>
+      <td style="font-family:var(--mono);font-size:.72rem;color:var(--text2)">${t.contact}</td>
+    </tr>`).join('');
+}
+
+function filterAdmin(f,btn){
+  adminFilter=f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderAdminTable();
+}
+
+function markFixed(id){
+  const r=reports.find(x=>x.id===id);
+  if(r){r.status='fixed';r.severity='fixed';renderAll();showToast('✅ Repaired',`${id} marked as fixed`);}
+}
+function updateStatus(id,status){
+  const r=reports.find(x=>x.id===id);
+  if(r){r.status=status;renderAll();showToast('📋 Updated',`${id} → ${statusLabels[status]}`);}
+}
+function scheduleRepair(id){
+  const r=reports.find(x=>x.id===id);
+  if(r){
+    r.status='repair_scheduled';
+    const available=teams.find(t=>t.status==='available');
+    if(available){r.team=available.name;available.status='active';available.job=`${id} — ${r.village}`;}
+    renderAll();renderAdminTeams();renderRepairPanel();renderSidebarTeams();
+    showToast('🔧 Repair Scheduled',`${id} — ${available?available.name+' assigned':'awaiting team'}`);
+  }
+}
+
+function viewReport(id){
+  const r=reports.find(x=>x.id===id);if(!r)return;
+  const sev=r.status==='fixed'?'fixed':r.severity;
+  const sc=statusColors[r.status]||{dot:'#888',text:'#888'};
+  document.getElementById('modal-title').innerHTML=`${r.id} <span style="font-family:var(--body);font-size:1rem;font-weight:400;color:var(--text2)">— ${r.type}</span>`;
+  document.getElementById('modal-body').innerHTML=[
+    ['Location',`${r.village}, ${r.road} <br><span style="font-size:.72rem;color:var(--text2)">Sitamarhi, Bihar — 843302</span>`],
+    ['Severity',`<span class="sev-badge badge-${sev}">${sev.toUpperCase()}</span>${r.priority!=='normal'?` <span style="color:${r.priority==='critical'?'var(--red)':'var(--yellow)'};">${r.priority==='critical'?'🔥 Critical Priority':'🚨 Urgent'}</span>`:''}`],
+    ['Status',`<span style="display:inline-flex;align-items:center;gap:.4rem"><span style="width:6px;height:6px;background:${sc.dot};border-radius:50%"></span><span style="color:${sc.text}">${statusLabels[r.status]}</span></span>`],
+    ['GPS',`<span style="font-family:var(--mono);font-size:.78rem;color:var(--accent)">${r.lat}, ${r.lng}</span>`],
+    ['Team',r.team||'Not assigned'],
+    ['CCTV',r.cctv?`<span class="tag tag-cctv">${r.cctv}</span> <button onclick="openCCTV('${r.cctv}')" class="action-btn" style="margin-left:.3rem;font-size:.68rem">View Feed</button>`:'None linked'],
+    ['Nagar Nigam',r.nnSent
+      ? `<span style="color:#22c55e;font-weight:600">✅ Sent</span> &nbsp;<span style="font-family:var(--mono);font-size:.72rem;color:var(--accent3)">Ref: ${r.nnRef}</span> <span style="font-size:.7rem;color:var(--text2);margin-left:.3rem">on ${r.nnDate}</span>`
+      : `<span style="color:var(--red);font-size:.78rem">⚠️ Not sent yet</span>`
+    ],
+    ['Reporter',r.reporter],
+    ['Contact',r.contact],
+    ['Date',r.date],
+    ['Description',`<span style="font-size:.85rem;line-height:1.5">${r.desc}</span>`],
+  ].map(([l,v])=>`<div class="modal-row"><div class="modal-label">${l}</div><div class="modal-val">${v}</div></div>`).join('');
+  document.getElementById('modal-actions').innerHTML=`
+    ${r.status!=='fixed'?`<button class="modal-btn success" onclick="markFixed('${r.id}');closeModal()">✓ Mark Fixed</button>`:''}
+    ${r.status==='submitted'?`<button class="modal-btn primary" onclick="scheduleRepair('${r.id}');closeModal()">🔧 Schedule Repair</button>`:''}
+    ${!r.nnSent?`<button class="modal-btn" style="background:rgba(14,165,233,.15);border-color:rgba(14,165,233,.4);color:var(--accent3)" onclick="sendToNagarNigam('${r.id}');closeModal()">📤 Send to Nagar Nigam</button>`:''}
+    <button class="modal-btn ghost" onclick="closeModal()">Close</button>
+  `;
+  document.getElementById('modal-backdrop').classList.add('open');
+}
+
+function closeModal(e){
+  if(!e||e.target===document.getElementById('modal-backdrop')||!e.target.closest('.modal')){
+    document.getElementById('modal-backdrop').classList.remove('open');
+  }
+}
+
+// ════════════════════════════════════
+//  CCTV
+// ════════════════════════════════════
+function renderCCTVGrid(){
+  const grid=document.getElementById('cctv-grid');
+  grid.innerHTML=cameras.map(c=>`
+    <div class="cctv-feed" onclick="openCCTV('${c.id}')">
+      <div class="cctv-screen">
+        <div class="cctv-noise"></div>
+        ${c.online?`<div class="scan-line"></div>`:''}
+        <div class="cctv-icon">📹</div>
+        ${c.online?`<div class="cctv-live-badge"><span style="width:5px;height:5px;background:#fff;border-radius:50%;animation:breathe .6s infinite;display:inline-block"></span> LIVE</div>`:''}
+        ${!c.online?`<div class="cctv-offline-overlay">⚠️ OFFLINE</div>`:''}
+        ${c.alerts?`<div style="position:absolute;bottom:.5rem;right:.5rem;background:rgba(239,68,68,.9);color:#fff;font-size:.58rem;font-weight:700;padding:.15rem .4rem;border-radius:3px">${c.alerts} ALERT${c.alerts>1?'S':''}</div>`:''}
+      </div>
+      <div class="cctv-info">
+        <div class="cctv-name">${c.id} — ${c.name}</div>
+        <div class="cctv-meta">${c.location} &nbsp;·&nbsp; ${c.online?'<span style="color:#22c55e">● Online</span>':'<span style="color:#ef4444">● Offline</span>'}</div>
+      </div>
+    </div>`).join('');
+}
+
+function renderCCTVAlerts(){
+  const el=document.getElementById('cctv-alerts');
+  el.innerHTML=cctvAlerts.map(a=>`
+    <div class="alert-item">
+      <div class="alert-icon">${a.type.includes('Congestion')?'🚦':a.type.includes('Pothole')?'🕳':a.type.includes('Water')?'💧':a.type.includes('Roadblock')?'🚧':'📹'}</div>
+      <div class="alert-body">
+        <div class="alert-title">${a.type} <span class="sev-badge badge-${a.severity}" style="font-size:.6rem">${a.severity.toUpperCase()}</span></div>
+        <div style="font-size:.78rem;color:var(--text2);margin-top:.1rem">${a.desc}</div>
+        <div class="alert-meta">${a.cam} &nbsp;·&nbsp; ${a.time}</div>
+      </div>
+    </div>`).join('');
+}
+
+function openCCTV(id){
+  const c=cameras.find(x=>x.id===id);if(!c)return;
+  document.getElementById('cctv-modal-title').textContent=`${c.id} — ${c.name}`;
+  document.getElementById('cctv-modal-body').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.8rem">
+      ${[['Location',c.location],['Status',c.online?'<span style="color:#22c55e">● Online</span>':'<span style="color:#ef4444">● Offline</span>'],['Alerts',c.alerts?`<span style="color:var(--red)">${c.alerts} active</span>`:'None'],['Linked Reports',reports.filter(r=>r.cctv===id).length]].map(([l,v])=>`
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.6rem .8rem">
+          <div style="font-size:.65rem;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;font-weight:600">${l}</div>
+          <div style="font-size:.85rem;margin-top:.2rem">${v}</div>
+        </div>`).join('')}
+    </div>
+    <div style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);margin-bottom:.5rem">Linked Reports</div>
+    ${reports.filter(r=>r.cctv===id).map(r=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:.5rem .7rem;margin-bottom:.3rem;display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="closeCCTVModal();viewReport('${r.id}')"><span style="font-family:var(--mono);font-size:.72rem;color:var(--text2)">${r.id}</span><span style="font-size:.78rem">${r.village} — ${r.type}</span><span class="sev-badge badge-${r.status==='fixed'?'fixed':r.severity}" style="font-size:.6rem">${r.status==='fixed'?'Fixed':(r.severity).toUpperCase()}</span></div>`).join('')||'<div style="font-size:.8rem;color:var(--text2);padding:.4rem 0">No linked reports</div>'}
+  `;
+  document.getElementById('cctv-modal-backdrop').classList.add('open');
+}
+function closeCCTVModal(e){
+  if(!e||e.target===document.getElementById('cctv-modal-backdrop')){
+    document.getElementById('cctv-modal-backdrop').classList.remove('open');
+  }
+}
+function showAddCameraModal(){showToast('📹 Add Camera','Camera registration form coming soon.');}
+
+// ════════════════════════════════════
+//  REPAIR TRACKING
+// ════════════════════════════════════
+const stepIndex={submitted:0,under_review:1,repair_scheduled:2,fixed:3};
+const stepNames=['Submitted','Reviewed','Scheduled','Repaired'];
+
+function renderRepairPanel(){
+  const container=document.getElementById('repair-content');
+  const filter=document.getElementById('repair-filter')?.value||'all';
+  const filtered=filter==='all'?reports:reports.filter(r=>r.status===filter);
+  container.innerHTML=filtered.map(r=>{
+    const sev=r.status==='fixed'?'fixed':r.severity;
+    const sc=statusColors[r.status]||{dot:'#888',text:'#888'};
+    const step=stepIndex[r.status]??0;
+    return `<div class="repair-track-card">
+      <div class="repair-header">
+        <div>
+          <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.2rem">
+            <span class="repair-id">${r.id}</span>
+            <span class="sev-badge badge-${sev}">${sev.toUpperCase()}</span>
+            ${r.priority!=='normal'?`<span style="font-size:.65rem;color:${r.priority==='critical'?'var(--red)':'var(--yellow)'}">${r.priority==='critical'?'🔥 Critical':'🚨 Urgent'}</span>`:''}
+          </div>
+          <div class="repair-loc">${r.village} — ${r.road.slice(0,35)}</div>
+          <div class="repair-desc">${r.type} · Reported by ${r.reporter} on ${r.date}</div>
+        </div>
+        <div style="text-align:right">
+          ${r.team?`<div style="font-size:.78rem;color:var(--accent3)">👷 ${r.team}</div>`:'<div style="font-size:.75rem;color:var(--text3)">No team assigned</div>'}
+          ${r.cctv?`<div style="font-size:.72rem;color:var(--purple);margin-top:.2rem">📹 ${r.cctv}</div>`:''}
+        </div>
+      </div>
+      <div class="repair-progress">
+        <div class="progress-steps">
+          ${stepNames.map((name,i)=>`
+            <div class="step ${i<step?'done':i===step?'active':''}">
+              <div class="step-circle">${i<step?'✓':i+1}</div>
+              <div class="step-label">${name}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div style="display:flex;gap:.5rem;margin-top:.9rem;justify-content:flex-end">
+        <button class="action-btn" onclick="viewReport('${r.id}')">Details</button>
+        ${r.status!=='fixed'?`<button class="action-btn success" onclick="markFixed('${r.id}')">✓ Mark Fixed</button>`:''}
+        ${r.status==='submitted'?`<button class="action-btn purple" onclick="scheduleRepair('${r.id}')">🔧 Schedule</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════
+//  ANALYTICS
+// ════════════════════════════════════
+function renderAnalytics(){
+  // Types chart
+  const typeCounts={};
+  reports.forEach(r=>{typeCounts[r.type]=(typeCounts[r.type]||0)+1;});
+  const maxT=Math.max(...Object.values(typeCounts));
+  const colors=['#ef4444','#f5a623','#3b82f6','#22c55e','#a855f7','#0ea5e9','#f97316'];
+  document.getElementById('chart-types').innerHTML=
+    Object.entries(typeCounts).sort((a,b)=>b[1]-a[1]).map(([k,v],i)=>`
+      <div class="bar-row">
+        <div class="bar-label" style="font-size:.72rem">${k.slice(0,14)}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${(v/maxT*100)}%;background:${colors[i%colors.length]};"></div></div>
+        <div class="bar-val">${v}</div>
+      </div>`).join('');
+
+  // Villages chart
+  const villCounts={};
+  reports.forEach(r=>{villCounts[r.village]=(villCounts[r.village]||0)+1;});
+  const maxV=Math.max(...Object.values(villCounts));
+  document.getElementById('chart-villages').innerHTML=
+    Object.entries(villCounts).sort((a,b)=>b[1]-a[1]).map(([k,v],i)=>`
+      <div class="bar-row">
+        <div class="bar-label" style="font-size:.72rem">${k.slice(0,12)}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${(v/maxV*100)}%;background:${colors[(i+2)%colors.length]};"></div></div>
+        <div class="bar-val">${v}</div>
+      </div>`).join('');
+
+  // Donut
+  const statCounts={submitted:0,under_review:0,repair_scheduled:0,fixed:0};
+  reports.forEach(r=>statCounts[r.status]=(statCounts[r.status]||0)+1);
+  document.getElementById('donut-total').textContent=reports.length;
+  const donutColors={submitted:'#3b82f6',under_review:'#f5a623',repair_scheduled:'#a855f7',fixed:'#22c55e'};
+  const total=reports.length;let offset=0;const r=45,c=60,circ=2*Math.PI*r;
+  const paths=Object.entries(statCounts).map(([k,v])=>{
+    const dash=(v/total)*circ;
+    const p=`<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${donutColors[k]}" stroke-width="14" stroke-dasharray="${dash} ${circ-dash}" stroke-dashoffset="-${offset}" transform="rotate(-90 ${c} ${c})"/>`;
+    offset+=dash;return p;
+  }).join('');
+  document.getElementById('donut-svg').innerHTML=`<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--border)" stroke-width="14"/>${paths}`;
+  document.getElementById('donut-legend').innerHTML=Object.entries(statCounts).map(([k,v])=>`
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <div style="width:8px;height:8px;border-radius:50%;background:${donutColors[k]}"></div>
+      <span style="font-size:.72rem">${statusLabels[k]}</span>
+      <span style="font-family:var(--mono);font-size:.7rem;color:var(--text2);margin-left:.2rem">${v}</span>
+    </div>`).join('');
+
+  // Resolution
+  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const res=[2,1,3,0,2,1,2];
+  const maxR=Math.max(...res);
+  document.getElementById('chart-resolution').innerHTML=days.map((d,i)=>`
+    <div class="bar-row">
+      <div class="bar-label" style="font-size:.72rem">${d}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${maxR?res[i]/maxR*100:0}%;background:#22c55e;"></div></div>
+      <div class="bar-val">${res[i]}</div>
+    </div>`).join('');
+
+  // Timeline
+  const events=[
+    {dot:'#22c55e',title:'RG-006 marked as fixed',meta:'Team Alpha · 5h ago'},
+    {dot:'#a855f7',title:'RG-001 repair scheduled',meta:'Team Alpha assigned · 6h ago'},
+    {dot:'#ef4444',title:'SEVERE: RG-007 submitted',meta:'Kho Nagor · 8h ago'},
+    {dot:'#f5a623',title:'CAM-002 alert: pothole impact',meta:'Rampur Circle · 9h ago'},
+    {dot:'#3b82f6',title:'RG-004 under review',meta:'Admin · 10h ago'},
+    {dot:'#0ea5e9',title:'PWD acknowledged RG-002',meta:'Government · 12h ago'},
+  ];
+  document.getElementById('activity-timeline').innerHTML=events.map((e,i)=>`
+    <div class="timeline-item">
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div class="tl-dot" style="background:${e.dot}"></div>
+        ${i<events.length-1?`<div class="tl-line"></div>`:''}
+      </div>
+      <div class="tl-content">
+        <div class="tl-title">${e.title}</div>
+        <div class="tl-meta">${e.meta}</div>
+      </div>
+    </div>`).join('');
+}
+
+function sendToNagarNigam(id){
+  const r=reports.find(x=>x.id===id);
+  if(!r)return;
+  if(r.nnSent){showToast('ℹ️ Already Sent',`${id} was already sent. Ref: ${r.nnRef}`);return;}
+  r.nnSent=true;
+  r.nnDate=new Date().toISOString().split('T')[0];
+  r.nnRef=`NN-2026-${String(Math.floor(Math.random()*900)+100)}`;
+  notifications.unshift({id:Date.now(),text:`📤 ${id} sent to Nagar Nigam Sitamarhi — Ref: ${r.nnRef}`,time:'just now',type:'govt',unread:true});
+  updateNotifBadge();renderNotifs();renderAll();
+  showToast('📤 Sent to Nagar Nigam!',`Ref: ${r.nnRef} | Photos + report emailed to nagarnigam.sitamarhi@bihar.gov.in`);
+}
+
+function sendAllPendingToNN(){
+  const unsent=reports.filter(r=>!r.nnSent&&r.status!=='fixed');
+  if(!unsent.length){showToast('✅ All Sent','All active reports already forwarded to Nagar Nigam.');return;}
+  unsent.forEach(r=>{
+    r.nnSent=true;
+    r.nnDate=new Date().toISOString().split('T')[0];
+    r.nnRef=`NN-2026-${String(Math.floor(Math.random()*900)+100)}`;
+  });
+  renderAll();
+  showToast('📤 Bulk Sent!',`${unsent.length} reports forwarded to Nagar Nigam Sitamarhi`);
+}
+
+// ════════════════════════════════════
+//  GOVERNMENT
+// ════════════════════════════════════
+function renderDepts(){
+  const nnCard = `
+    <div style="background:linear-gradient(135deg,rgba(14,165,233,.12),rgba(14,165,233,.04));border:1px solid rgba(14,165,233,.35);border-radius:14px;padding:1.2rem 1.4rem;margin-bottom:1rem;">
+      <div style="display:flex;align-items:center;gap:.8rem;margin-bottom:.8rem">
+        <div style="font-size:2rem;width:52px;height:52px;background:rgba(14,165,233,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;">🏛</div>
+        <div style="flex:1">
+          <div style="font-size:1rem;font-weight:700;color:var(--accent3)">Nagar Nigam Sitamarhi</div>
+          <div style="font-size:.75rem;color:var(--text2);margin-top:.15rem">Primary Authority — Bihar, PIN 843302</div>
+          <div style="display:flex;gap:.5rem;margin-top:.3rem;flex-wrap:wrap">
+            <span style="font-size:.68rem;background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3);padding:.1rem .5rem;border-radius:4px;font-weight:600">● Connected</span>
+            <span style="font-size:.68rem;color:var(--text2)">📧 nagarnigam.sitamarhi@bihar.gov.in</span>
+            <span style="font-size:.68rem;color:var(--text2)">📞 06226-242001</span>
+          </div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem;margin-bottom:.8rem">
+        <div style="background:rgba(0,0,0,.2);border-radius:8px;padding:.6rem;text-align:center">
+          <div style="font-family:var(--mono);font-size:1.3rem;color:var(--accent)">${reports.filter(r=>r.nnSent).length}</div>
+          <div style="font-size:.65rem;color:var(--text2);text-transform:uppercase;letter-spacing:.06em">Reports Sent</div>
+        </div>
+        <div style="background:rgba(0,0,0,.2);border-radius:8px;padding:.6rem;text-align:center">
+          <div style="font-family:var(--mono);font-size:1.3rem;color:var(--red)">${reports.filter(r=>!r.nnSent&&r.status!=='fixed').length}</div>
+          <div style="font-size:.65rem;color:var(--text2);text-transform:uppercase;letter-spacing:.06em">Pending Send</div>
+        </div>
+        <div style="background:rgba(0,0,0,.2);border-radius:8px;padding:.6rem;text-align:center">
+          <div style="font-family:var(--mono);font-size:1.3rem;color:var(--green)">${reports.filter(r=>r.status==='fixed').length}</div>
+          <div style="font-size:.65rem;color:var(--text2);text-transform:uppercase;letter-spacing:.06em">Resolved</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+        <button class="modal-btn primary" style="font-size:.8rem" onclick="sendAllPendingToNN()">📤 Send All Pending to Nagar Nigam</button>
+        <button class="modal-btn ghost" style="font-size:.8rem" onclick="showToast('📞 Calling','Dialing Nagar Nigam Sitamarhi: 06226-242001')">📞 Call Office</button>
+        <button class="modal-btn ghost" style="font-size:.8rem" onclick="generateReport()">📄 Generate Report PDF</button>
+      </div>
+    </div>
+    <div class="section-divider" style="margin-bottom:.7rem">Nagar Nigam Forwarding Log</div>
+    <div class="table-wrap" style="margin-bottom:1.2rem">
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Report ID</th><th>Location</th><th>Type</th><th>NN Ref</th><th>Sent Date</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="nn-tbody"></tbody>
+        </table>
+      </div>
+    </div>`;
+
+  document.getElementById('dept-list').innerHTML = nnCard + departments.filter(d=>d.name!=='Nagar Nigam Sitamarhi').map(d=>`
+    <div class="dept-card">
+      <div class="dept-icon">${d.icon}</div>
+      <div class="dept-info">
+        <div class="dept-name">${d.name}</div>
+        <div class="dept-meta">${d.contact} &nbsp;·&nbsp; ${d.phone} &nbsp;·&nbsp; ${d.reports} active reports</div>
+      </div>
+      <div class="dept-actions">
+        <span style="font-size:.7rem;font-weight:600;color:${d.status==='Connected'?'#22c55e':'#f5a623'};margin-right:.4rem">${d.status}</span>
+        <button class="action-btn" onclick="showToast('📤 Message Sent','Authority notified.')">Message</button>
+      </div>
+    </div>`).join('');
+
+  const sel=document.getElementById('esc-report');
+  if(sel) sel.innerHTML=reports.filter(r=>r.status!=='fixed').map(r=>`<option value="${r.id}">${r.id} — ${r.village}, Sitamarhi</option>`).join('');
+  renderNNTable();
+}
+
+function renderNNTable(){
+  const tbody=document.getElementById('nn-tbody');
+  if(!tbody)return;
+  tbody.innerHTML=reports.map(r=>`
+    <tr>
+      <td><span style="font-family:var(--mono);font-size:.72rem;color:var(--text2)">${r.id}</span></td>
+      <td style="font-size:.78rem">${r.village}<br><span style="color:var(--text2);font-size:.7rem">${r.road.slice(0,28)}</span></td>
+      <td style="font-size:.78rem;color:var(--text2)">${r.type}</td>
+      <td style="font-family:var(--mono);font-size:.72rem;color:${r.nnRef?'var(--accent3)':'var(--text3)'}">${r.nnRef||'—'}</td>
+      <td style="font-family:var(--mono);font-size:.72rem;color:var(--text2)">${r.nnDate||'—'}</td>
+      <td><span style="font-size:.72rem;font-weight:600;color:${r.nnSent?'#22c55e':'#ef4444'}">${r.nnSent?'✅ Sent':'⚠️ Not Sent'}</span></td>
+      <td>${!r.nnSent&&r.status!=='fixed'?`<button class="action-btn" style="font-size:.7rem;border-color:rgba(14,165,233,.4);color:var(--accent3)" onclick="sendToNagarNigam('${r.id}');renderDepts()">📤 Send</button>`:'—'}</td>
+    </tr>`).join('');
+}
+
+function renderEscalations(){
+  const tbody=document.getElementById('escalation-tbody');
+  if(!tbody)return;
+  const sc={Acknowledged:'#22c55e','Under Review':'#f5a623',Closed:'#3b82f6'};
+  tbody.innerHTML=escalations.map(e=>`
+    <tr>
+      <td style="font-family:var(--mono);font-size:.72rem;color:var(--text2)">${e.date}</td>
+      <td style="font-family:var(--mono);font-size:.78rem;color:var(--accent)">${e.report}</td>
+      <td style="font-size:.78rem">${e.dept}</td>
+      <td><span style="color:${sc[e.status]||'#888'};font-size:.78rem;font-weight:600">${e.status}</span></td>
+      <td style="font-size:.78rem;color:var(--text2)">${e.response}</td>
+    </tr>`).join('');
+}
+
+function escalateIssue(){
+  const rid=document.getElementById('esc-report').value;
+  const dept=document.getElementById('esc-dept').value;
+  const msg=document.getElementById('esc-msg').value.trim();
+  if(!msg){showToast('⚠️ Empty Message','Please enter escalation message.');return;}
+  escalations.unshift({date:new Date().toISOString().split('T')[0],report:rid,dept:dept,status:'Pending',response:'Awaiting response'});
+  renderEscalations();
+  document.getElementById('esc-msg').value='';
+  showToast('📤 Escalated',`${rid} escalated to ${dept} — reference sent via email`);
+}
+
+function generateReport(){
+  showToast('📄 Report Generated',`Official PDF report generated for all ${reports.length} records.`);
+}
+
+// ════════════════════════════════════
+//  NOTIFICATIONS
+// ════════════════════════════════════
+function renderNotifs(){
+  const icons={report:'🚨',cctv:'📹',repair:'🔧',fixed:'✅',govt:'🏛'};
+  document.getElementById('notif-list').innerHTML=notifications.map(n=>`
+    <div class="notif-item ${n.unread?'unread':''}" onclick="markNotifRead(${n.id})">
+      <div class="notif-dot" style="background:${n.unread?'var(--accent)':'var(--text3)'}"></div>
+      <div class="notif-body">
+        <div class="notif-text">${icons[n.type]||'•'} ${n.text}</div>
+        <div class="notif-time">${n.time}</div>
+      </div>
+    </div>`).join('');
+  updateNotifBadge();
+}
+function updateNotifBadge(){
+  const unread=notifications.filter(n=>n.unread).length;
+  const badge=document.getElementById('notif-badge');
+  if(badge)badge.textContent=unread||'';
+  if(badge)badge.style.display=unread?'flex':'none';
+}
+function markNotifRead(id){
+  const n=notifications.find(x=>x.id===id);
+  if(n)n.unread=false;
+  renderNotifs();
+}
+function toggleNotif(){
+  document.getElementById('notif-panel').classList.toggle('open');
+}
+
+// ════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════
+function switchView(view){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById(`${view}-panel`).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  const views=['map','report','cctv','repair','analytics','admin','govt'];
+  const btns=document.querySelectorAll('nav button');
+  const idx=views.indexOf(view);
+  if(btns[idx])btns[idx].classList.add('active');
+  if(view==='map')setTimeout(()=>map.invalidateSize(),100);
+  if(view==='admin'){renderAdminTable();renderAdminTeams();}
+  if(view==='analytics')renderAnalytics();
+  if(view==='repair')renderRepairPanel();
+  if(view==='govt'){renderDepts();renderEscalations();}
+  if(view==='cctv'){renderCCTVGrid();renderCCTVAlerts();}
+}
+
+// ════════════════════════════════════
+//  TOAST
+// ════════════════════════════════════
+function showToast(title, body){
+  const t=document.getElementById('toast');
+  document.getElementById('toast-title').textContent=title;
+  document.getElementById('toast-body').textContent=body;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),4000);
+}
+
+// ════════════════════════════════════
+//  DRAG & DROP
+// ════════════════════════════════════
+const uz=document.getElementById('upload-zone');
+uz.addEventListener('dragover',e=>{e.preventDefault();uz.classList.add('dragover')});
+uz.addEventListener('dragleave',()=>uz.classList.remove('dragover'));
+uz.addEventListener('drop',e=>{
+  e.preventDefault();uz.classList.remove('dragover');
+  handlePhotos({target:{files:e.dataTransfer.files}});
+});
+</script>
+</body>
+</html>
